@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- ✅ CSP محكمة للـ admin panel -->
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'none';
+        script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net;
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com;
+        font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com;
+        img-src 'self' https://cdn.discordapp.com data:;
+        connect-src 'self' https://uvmsixbooxclnqduqivt.supabase.co https://discord.com;
+        frame-ancestors 'none';
+        base-uri 'self';
+        form-action 'none';
+    ">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <title>RESPECT | Control Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { --main-red: #ff0000; --dark-bg: #050505; }
+        body { font-family: 'Almarai', sans-serif; background: var(--dark-bg); color: white; margin: 0; overflow-x: hidden; }
+        .glass { background: rgba(10,10,10,0.98); backdrop-filter: blur(20px); border-left: 1px solid rgba(255,0,0,0.1); }
+        .sidebar { width: 280px; height: 100vh; position: fixed; right: 0; top: 0; z-index: 1000; }
+        .main-content { margin-right: 280px; padding: 40px; }
+        input, textarea, select { background: #0a0a0a !important; border: 1px solid #1a1a1a !important; color: white !important; padding: 14px; border-radius: 12px; width: 100%; outline: none; font-family: 'Almarai', sans-serif; }
+        .btn-red { background: var(--main-red); font-weight: 800; border-radius: 12px; transition: 0.3s; cursor: pointer; border: none; color: white; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-family: 'Almarai', sans-serif; }
+        .btn-red:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(255,0,0,0.4); }
+        .btn-red:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .card { background: #080808; border: 1px solid #111; border-radius: 20px; padding: 25px; margin-bottom: 20px; }
+        .hidden { display: none !important; }
+        /* ✅ Toast بدل confirm/alert */
+        #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px); background: #111; border: 1px solid #ff0000; color: white; padding: 12px 28px; border-radius: 50px; font-weight: bold; font-size: 0.9rem; transition: transform 0.4s ease; z-index: 99999; pointer-events: none; }
+        #toast.show { transform: translateX(-50%) translateY(0); }
+        /* ✅ Confirm Dialog مخصص بدل confirm() */
+        #confirm-dialog { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 99998; display: none; align-items: center; justify-content: center; }
+        #confirm-dialog.show { display: flex; }
+        #confirm-dialog .box { background: #0a0a0a; border: 1px solid #ff000033; border-radius: 20px; padding: 32px; max-width: 420px; width: 90%; text-align: center; }
+    </style>
+</head>
+<body>
+
+<!-- ✅ Toast -->
+<div id="toast"></div>
+
+<!-- ✅ Confirm Dialog مخصص بدل confirm() المعرّض للـ XSS -->
+<div id="confirm-dialog">
+    <div class="box">
+        <i class="fas fa-exclamation-triangle text-red-600 text-4xl mb-4"></i>
+        <p id="confirm-msg" class="text-white font-bold text-lg mb-6"></p>
+        <div class="flex gap-3">
+            <button id="confirm-yes" class="flex-1 btn-red py-3">تأكيد</button>
+            <button id="confirm-no" class="flex-1 bg-zinc-900 rounded-xl py-3 text-zinc-400">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<!-- شاشة التحميل -->
+<div id="loading-overlay" class="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center">
+    <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-red-600 mb-4"></div>
+    <p class="text-red-600 font-bold">جاري التحقق من الصلاحيات...</p>
+</div>
+
+<!-- القائمة الجانبية -->
+<aside class="sidebar glass p-6">
+    <div class="mb-10 text-center">
+        <div class="w-20 h-20 bg-red-600 rounded-3xl mx-auto mb-4 flex items-center justify-content shadow-red-600/30 shadow-2xl flex items-center justify-center">
+            <i class="fas fa-crown text-3xl"></i>
+        </div>
+        <h1 class="text-2xl font-black italic">RESPECT <span class="text-red-600">CP</span></h1>
+        <p id="role-display" class="text-[10px] text-zinc-500 mt-2 font-bold tracking-widest uppercase"></p>
+    </div>
+    <nav class="flex flex-col gap-2">
+        <button onclick="nav('news')"      class="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition text-right"><i class="fas fa-rss w-5 text-red-600"></i> الأخبار</button>
+        <button onclick="nav('rules')"     class="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition text-right"><i class="fas fa-scroll w-5 text-red-600"></i> القوانين</button>
+        <button onclick="nav('forms')"     class="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition text-right"><i class="fas fa-edit w-5 text-red-600"></i> التقديمات</button>
+        <button onclick="nav('blacklist')" class="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition text-right"><i class="fas fa-user-slash w-5 text-red-600"></i> البلاك ليست</button>
+        <button onclick="nav('staff')"     class="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition text-right"><i class="fas fa-users-cog w-5 text-red-600"></i> الإدارة</button>
+        <button onclick="logout()" class="flex items-center gap-4 p-4 rounded-2xl hover:bg-red-600/10 transition text-right text-zinc-600 hover:text-red-600 mt-auto"><i class="fas fa-sign-out-alt w-5"></i> خروج</button>
+    </nav>
+</aside>
+
+<!-- المحتوى -->
+<main class="main-content">
+    <section id="sec-news">
+        <div class="flex justify-between items-center mb-8">
+            <h2 class="text-4xl font-black italic">الأخبار</h2>
+            <button onclick="openNewsModal('news')" class="btn-red px-8 py-3 admin-btn hidden">+ إضافة خبر</button>
+        </div>
+        <div id="list-news"></div>
+    </section>
+
+    <section id="sec-rules" class="hidden">
+        <div class="flex justify-between items-center mb-8">
+            <h2 class="text-4xl font-black italic">القوانين</h2>
+            <button onclick="openNewsModal('rules')" class="btn-red px-8 py-3 admin-btn hidden">+ إضافة قانون</button>
+        </div>
+        <div id="list-rules"></div>
+    </section>
+
+    <section id="sec-forms" class="hidden">
+        <div class="flex justify-between items-center mb-8">
+            <h2 class="text-4xl font-black italic">التقديمات</h2>
+            <button onclick="openModal('app-modal')" class="btn-red px-8 py-3 admin-btn hidden">+ إنشاء قطاع</button>
+        </div>
+        <div id="list-forms" class="grid md:grid-cols-2 gap-6"></div>
+    </section>
+
+    <section id="sec-blacklist" class="hidden">
+        <div class="flex justify-between items-center mb-8">
+            <h2 class="text-4xl font-black italic text-red-600">BLACKLIST</h2>
+            <button onclick="openModal('bl-modal')" class="btn-red px-8 py-3 admin-btn hidden">+ إضافة منع</button>
+        </div>
+        <div id="list-blacklist" class="grid gap-3"></div>
+    </section>
+
+    <section id="sec-staff" class="hidden">
+        <div class="flex justify-between items-center mb-8">
+            <h2 class="text-4xl font-black italic">طاقم الإدارة</h2>
+            <button onclick="openModal('staff-modal')" class="btn-red px-8 py-3 admin-btn hidden">+ إضافة إداري</button>
+        </div>
+        <div id="list-staff" class="grid gap-3"></div>
+    </section>
+</main>
+
+<!-- مودال إنشاء قطاع -->
+<div id="app-modal" class="fixed inset-0 hidden bg-black/95 z-[5000] flex items-center justify-center p-6">
+    <div class="bg-[#0a0a0a] w-full max-w-2xl rounded-3xl p-8 border border-white/5 overflow-y-auto max-h-[90vh]">
+        <h3 class="text-2xl font-bold mb-6 text-red-600">قطاع تقديم جديد</h3>
+        <input id="app-title" placeholder="اسم القطاع" class="mb-4" maxlength="100">
+        <textarea id="app-desc" placeholder="الوصف" class="h-20 mb-4" maxlength="500"></textarea>
+        <!-- ✅ الـ webhook يُدخل هنا ويُحفظ في Supabase — لا يُرسل من الـ client -->
+        <input id="app-web" placeholder="Discord Webhook URL" class="mb-6" maxlength="300">
+        <div id="q-container" class="space-y-3 mb-6"></div>
+        <button onclick="addQField()" class="w-full bg-white/5 py-3 rounded-xl mb-6 text-xs">+ إضافة سؤال</button>
+        <div class="flex gap-2">
+            <button onclick="saveForm()" class="flex-1 btn-red py-4">حفظ</button>
+            <button onclick="closeModal('app-modal')" class="flex-1 bg-zinc-900 rounded-xl text-white py-4">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<!-- مودال تعيين إداري -->
+<div id="staff-modal" class="fixed inset-0 hidden bg-black/95 z-[5000] flex items-center justify-center p-6">
+    <div class="bg-[#0a0a0a] w-full max-w-md rounded-3xl p-8 border border-white/5">
+        <h3 class="text-2xl font-bold mb-6 text-red-600">تعيين إداري</h3>
+        <!-- ✅ pattern للتحقق من Discord ID (أرقام فقط) -->
+        <input id="st-uid" placeholder="Discord ID (أرقام فقط)" class="mb-4" maxlength="19" pattern="\d{17,19}" inputmode="numeric">
+        <p class="text-zinc-600 text-xs mb-4">مثال: 123456789012345678</p>
+        <select id="st-role" class="mb-6">
+            <option value="2">Moderator</option>
+            <option value="3">Admin</option>
+        </select>
+        <button onclick="confirmStaff()" class="w-full btn-red py-4">تأكيد</button>
+        <button onclick="closeModal('staff-modal')" class="w-full text-zinc-600 mt-4 text-sm py-2">إلغاء</button>
+    </div>
+</div>
+
+<!-- مودال البلاك ليست -->
+<div id="bl-modal" class="fixed inset-0 hidden bg-black/95 z-[5000] flex items-center justify-center p-6">
+    <div class="bg-[#0a0a0a] w-full max-w-md rounded-3xl p-8 border border-white/5">
+        <h3 class="text-2xl font-bold mb-6">منع مستخدم</h3>
+        <input id="bl-uid" placeholder="User ID (أرقام فقط)" class="mb-4" maxlength="19" pattern="\d{17,19}" inputmode="numeric">
+        <textarea id="bl-msg" placeholder="السبب..." class="h-32 mb-6" maxlength="500"></textarea>
+        <button onclick="confirmBlacklist()" class="w-full btn-red py-4">تأكيد</button>
+        <button onclick="closeModal('bl-modal')" class="w-full text-zinc-600 mt-4 text-sm py-2">إلغاء</button>
+    </div>
+</div>
+
+<!-- مودال الأخبار/القوانين -->
+<div id="news-modal" class="fixed inset-0 hidden bg-black/95 z-[5000] flex items-center justify-center p-6">
+    <div class="bg-[#0a0a0a] w-full max-w-md rounded-3xl p-8 border border-white/5">
+        <h3 id="news-modal-title" class="text-2xl font-bold mb-6">إضافة محتوى</h3>
+        <input id="n-title" placeholder="العنوان" class="mb-4" maxlength="200">
+        <textarea id="n-txt" placeholder="التفاصيل..." class="h-40 mb-6" maxlength="2000"></textarea>
+        <button id="n-save-btn" class="w-full btn-red py-4">نشر</button>
+        <button onclick="closeModal('news-modal')" class="w-full text-zinc-600 mt-4 text-sm py-2">إلغاء</button>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ============================================================
+// ✅ الإعدادات
+// ============================================================
+const SUPABASE_URL  = 'https://uvmsixbooxclnqduqivt.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_c5KwR5PUs-dxGa57dLY5sw_c4TQ2Wo0';
+
+// ✅ MASTER_ID محذوف من الكود — التحقق يتم من قاعدة البيانات فقط
+// أضف المالك في جدول staff برتبة 4 مباشرة من Supabase Dashboard
+
+const DISCORD_ID_REGEX = /^\d{17,19}$/;
+const WEBHOOK_REGEX    = /^https:\/\/discord(app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/;
+const ALLOWED_SECTIONS = new Set(['news', 'rules', 'forms', 'blacklist', 'staff']);
+const ALLOWED_TABLES   = new Set(['news', 'rules', 'forms', 'blacklist', 'staff']);
+
+const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+let currentUser = null;
+let currentRole = 0; // 0=لا شيء، 2=Mod، 3=Admin، 4=Owner
+
+// ============================================================
+// ✅ دوال مساعدة آمنة
+// ============================================================
+function sanitize(str, max = 500) {
+    if (typeof str !== 'string') return '';
+    return str.trim().substring(0, max);
+}
+
+function showToast(msg, duration = 3500) {
+    const t = document.getElementById('toast');
+    t.textContent = sanitize(msg, 150);
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), duration);
+}
+
+// ✅ Confirm Dialog مخصص وآمن بدل confirm() المعرّض للـ XSS
+function showConfirm(msg) {
+    return new Promise(resolve => {
+        const dialog = document.getElementById('confirm-dialog');
+        // textContent آمن — لا HTML injection
+        document.getElementById('confirm-msg').textContent = sanitize(msg, 200);
+        dialog.classList.add('show');
+
+        const yes = document.getElementById('confirm-yes');
+        const no  = document.getElementById('confirm-no');
+
+        const cleanup = (result) => {
+            dialog.classList.remove('show');
+            yes.replaceWith(yes.cloneNode(true)); // إزالة الـ listeners القديمة
+            no.replaceWith(no.cloneNode(true));
+            resolve(result);
+        };
+
+        document.getElementById('confirm-yes').onclick = () => cleanup(true);
+        document.getElementById('confirm-no').onclick  = () => cleanup(false);
+    });
+}
+
+// ============================================================
+// ✅ Token Store — sessionStorage بدل localStorage
+// ============================================================
+const TokenStore = {
+    _key: '_rt_v2',
+    get() {
+        try {
+            const raw = sessionStorage.getItem(this._key);
+            return raw ? decodeURIComponent(atob(raw.split('').reverse().join(''))) : null;
+        } catch { return null; }
+    },
+    clear() {
+        try { sessionStorage.removeItem(this._key); } catch {}
+    }
+};
+
+// ============================================================
+// ✅ init — التحقق من الصلاحيات بشكل صحيح
+// ============================================================
+async function init() {
+    const token = TokenStore.get();
+    if (!token) return redirect();
+
+    try {
+        const res = await fetch('https://discord.com/api/users/@me', {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error('Invalid token');
+        const user = await res.json();
+
+        // ✅ التحقق من Discord ID
+        if (!DISCORD_ID_REGEX.test(user.id)) throw new Error('Invalid user');
+        currentUser = user;
+
+        // ✅ التحقق من الرتبة من قاعدة البيانات فقط — لا MASTER_ID في الكود
+        const { data: staffData, error } = await _supabase
+            .from('staff')
+            .select('role')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        if (error || !staffData) return redirect(); // ليس staff
+        currentRole = parseInt(staffData.role) || 0;
+        if (currentRole < 2) return redirect(); // رتبة غير كافية
+
+        // تحديث الواجهة
+        const roleNames = { 2: 'MODERATOR', 3: 'ADMIN', 4: 'OWNER' };
+        document.getElementById('role-display').textContent =
+            roleNames[currentRole] || 'STAFF';
+
+        if (currentRole >= 3) {
+            document.querySelectorAll('.admin-btn').forEach(b => b.classList.remove('hidden'));
+        }
+
+        document.getElementById('loading-overlay').classList.add('hidden');
+        nav('news');
+
+    } catch (e) {
+        console.warn('Auth failed:', e.message);
+        TokenStore.clear();
+        redirect();
+    }
+}
+
+function redirect() {
+    window.location.replace('index.html');
+}
+
+function logout() {
+    TokenStore.clear();
+    currentUser = null;
+    redirect();
+}
+
+// ============================================================
+// ✅ nav — whitelist للأقسام
+// ============================================================
+function nav(sec) {
+    if (!ALLOWED_SECTIONS.has(sec)) return;
+    document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+    const target = document.getElementById(`sec-${sec}`);
+    if (target) target.classList.remove('hidden');
+    loadData(sec);
+}
+
+// ============================================================
+// ✅ loadData — بناء DOM بشكل آمن بدون innerHTML من البيانات
+// ============================================================
+async function loadData(table) {
+    if (!ALLOWED_TABLES.has(table)) return;
+
+    const listEl = document.getElementById(`list-${table}`);
+    if (!listEl) return;
+    listEl.textContent = 'جاري التحميل...';
+
+    // ✅ نجلب فقط الحقول المطلوبة — لا SELECT *
+    const columns = {
+        news:      'id, title, content, created_at',
+        rules:     'id, title, content',
+        forms:     'id, title, desc, is_open',     // ✅ بدون webhook
+        blacklist: 'id, user_id, reason, created_at',
+        staff:     'id, user_id, role'
+    };
+
+    const { data, error } = await _supabase
+        .from(table)
+        .select(columns[table])
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+    listEl.textContent = '';
+
+    if (error) {
+        const msg = document.createElement('p');
+        msg.className   = 'text-red-500 text-center py-10';
+        msg.textContent = 'خطأ في جلب البيانات';
+        listEl.appendChild(msg);
+        return;
+    }
+
+    if (!data?.length) {
+        const msg = document.createElement('p');
+        msg.className   = 'text-zinc-600 text-center py-10';
+        msg.textContent = 'لا توجد بيانات';
+        listEl.appendChild(msg);
+        return;
+    }
+
+    const frag = document.createDocumentFragment();
+    data.forEach(item => frag.appendChild(createCard(table, item)));
+    listEl.appendChild(frag);
+}
+
+// ✅ بناء كل Card بشكل آمن بدون innerHTML من بيانات المستخدم
+function createCard(table, item) {
+    const card = document.createElement('div');
+    card.className = 'card flex justify-between items-center border border-white/5 hover:border-red-600/20 transition';
+
+    const info = document.createElement('div');
+    info.className = 'flex-1 min-w-0';
+
+    const h4 = document.createElement('h4');
+    h4.className   = 'text-white font-bold text-lg truncate';
+    // ✅ textContent — آمن تماماً
+    h4.textContent = sanitize(item.title || item.user_id || '—', 100);
+
+    const p = document.createElement('p');
+    p.className   = 'text-xs text-zinc-500 mt-1 truncate';
+    p.textContent = sanitize(item.content || item.desc || item.reason || roleLabel(item.role), 200);
+
+    info.appendChild(h4);
+    info.appendChild(p);
+    card.appendChild(info);
+
+    // ✅ أزرار الإجراءات
+    if (currentRole >= 2) {
+        const actions = document.createElement('div');
+        actions.className = 'flex gap-3 items-center mr-4 flex-shrink-0';
+
+        // زر تبديل حالة النموذج
+        if (table === 'forms' && currentRole >= 3) {
+            const toggleBtn = document.createElement('button');
+            toggleBtn.className = `px-4 py-2 rounded-xl text-[11px] font-black transition ${
+                item.is_open
+                ? 'bg-green-600/10 text-green-500 border border-green-600/20'
+                : 'bg-red-600/10 text-red-500 border border-red-600/20'
+            }`;
+            // ✅ textContent بدل innerHTML
+            toggleBtn.textContent = item.is_open ? '🔓 مفتوح' : '🔒 مغلق';
+            toggleBtn.onclick = () => toggleForm(item.id, item.is_open, item.title);
+            actions.appendChild(toggleBtn);
+        }
+
+        // زر الحذف
+        if (currentRole >= 3) {
+            const delBtn = document.createElement('button');
+            delBtn.className = 'text-zinc-700 hover:text-red-600 p-2';
+            delBtn.setAttribute('aria-label', 'حذف');
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-trash';
+            delBtn.appendChild(icon);
+            delBtn.onclick = () => del(table, item.id);
+            actions.appendChild(delBtn);
+        }
+
+        card.appendChild(actions);
+    }
+
+    return card;
+}
+
+function roleLabel(role) {
+    return { 2: 'Moderator', 3: 'Admin', 4: 'Owner' }[role] || 'Staff';
+}
+
+// ============================================================
+// ✅ toggleForm — Confirm آمن بدون XSS
+// ============================================================
+async function toggleForm(id, currentState, title) {
+    // ✅ showConfirm يستخدم textContent — لا XSS
+    const confirmed = await showConfirm(
+        `هل أنت متأكد من ${currentState ? 'إغلاق' : 'فتح'} تقديم: ${sanitize(title, 50)}؟`
+    );
+    if (!confirmed) return;
+
+    const { error } = await _supabase
+        .from('forms')
+        .update({ is_open: !currentState })
+        .eq('id', id);
+
+    if (!error) { showToast('✅ تم تحديث الحالة'); loadData('forms'); }
+    else showToast('❌ فشل تحديث الحالة');
+}
+
+// ============================================================
+// ✅ saveForm — مع تحقق كامل من المدخلات
+// ============================================================
+async function saveForm() {
+    if (currentRole < 3) { showToast('⛔ لا تملك صلاحية'); return; }
+
+    const title   = sanitize(document.getElementById('app-title').value, 100);
+    const desc    = sanitize(document.getElementById('app-desc').value, 500);
+    const webhook = sanitize(document.getElementById('app-web').value, 300);
+
+    if (!title) { showToast('أدخل اسم القطاع'); return; }
+
+    // ✅ التحقق من صيغة الـ webhook
+    if (webhook && !WEBHOOK_REGEX.test(webhook)) {
+        showToast('❌ رابط الـ Webhook غير صالح');
+        return;
+    }
+
+    const rows = document.querySelectorAll('.q-row');
+    const questions = Array.from(rows).slice(0, 20).map(r => { // ✅ حد أقصى 20 سؤال
+        const text = sanitize(r.querySelector('.q-val')?.value || '', 200);
+        const type = r.querySelector('.q-ty')?.value === 'choice' ? 'select' : 'text'; // whitelist
+        return { text, type };
+    }).filter(q => q.text); // إزالة الأسئلة الفارغة
+
+    if (!questions.length) { showToast('أضف سؤالاً واحداً على الأقل'); return; }
+
+    const btn = document.querySelector('#app-modal .btn-red');
+    btn.disabled    = true;
+    btn.textContent = 'جاري الحفظ...';
+
+    const { error } = await _supabase.from('forms').insert([{
+        title,
+        desc,
+        webhook,
+        questions,
+        is_open: true
+    }]);
+
+    btn.disabled    = false;
+    btn.textContent = 'حفظ';
+
+    if (!error) { showToast('✅ تم إنشاء القطاع'); closeModal('app-modal'); loadData('forms'); }
+    else showToast('❌ خطأ في الحفظ، تأكد من الأعمدة');
+}
+
+// ============================================================
+// ✅ addQField — آمن (لا innerHTML من مدخلات المستخدم)
+// ============================================================
+function addQField() {
+    const container = document.getElementById('q-container');
+    if (container.querySelectorAll('.q-row').length >= 20) {
+        showToast('الحد الأقصى 20 سؤال');
+        return;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'flex gap-2 q-row';
+
+    const input = document.createElement('input');
+    input.className   = 'q-val flex-[3]';
+    input.placeholder = 'السؤال';
+    input.maxLength   = 200;
+    input.type        = 'text';
+
+    const select = document.createElement('select');
+    select.className = 'q-ty flex-1';
+
+    [{ v: 'text', l: 'كتابة' }, { v: 'choice', l: 'اختياري' }].forEach(({ v, l }) => {
+        const opt = document.createElement('option');
+        opt.value       = v;
+        opt.textContent = l;
+        select.appendChild(opt);
+    });
+
+    const delBtn = document.createElement('button');
+    delBtn.type      = 'button';
+    delBtn.className = 'text-zinc-600 hover:text-red-600 px-2';
+    delBtn.setAttribute('aria-label', 'حذف السؤال');
+    delBtn.textContent = '✕';
+    delBtn.onclick   = () => row.remove();
+
+    row.appendChild(input);
+    row.appendChild(select);
+    row.appendChild(delBtn);
+    container.appendChild(row);
+}
+
+// ============================================================
+// ✅ confirmStaff — مع تحقق من Discord ID
+// ============================================================
+async function confirmStaff() {
+    if (currentRole < 3) { showToast('⛔ لا تملك صلاحية'); return; }
+
+    const uid  = sanitize(document.getElementById('st-uid').value, 20);
+    const role = parseInt(document.getElementById('st-role').value);
+
+    // ✅ تحقق صارم من Discord ID
+    if (!DISCORD_ID_REGEX.test(uid)) {
+        showToast('❌ Discord ID غير صالح (17-19 رقم فقط)');
+        return;
+    }
+
+    // ✅ التحقق أن الرتبة ضمن القيم المسموح بها
+    if (![2, 3].includes(role)) { showToast('❌ رتبة غير صالحة'); return; }
+
+    // ✅ منع الأدمن من تعيين نفسه أو رفع رتبته
+    if (uid === currentUser?.id) { showToast('❌ لا يمكنك تعيين نفسك'); return; }
+
+    const confirmed = await showConfirm(`تعيين ${uid} كـ ${roleLabel(role)}؟`);
+    if (!confirmed) return;
+
+    const { error } = await _supabase
+        .from('staff')
+        .upsert([{ user_id: uid, role }], { onConflict: 'user_id' });
+
+    if (!error) { showToast('✅ تم التعيين'); closeModal('staff-modal'); loadData('staff'); }
+    else showToast('❌ خطأ في التعيين');
+}
+
+// ============================================================
+// ✅ confirmBlacklist — مع تحقق من Discord ID
+// ============================================================
+async function confirmBlacklist() {
+    if (currentRole < 2) { showToast('⛔ لا تملك صلاحية'); return; }
+
+    const uid    = sanitize(document.getElementById('bl-uid').value, 20);
+    const reason = sanitize(document.getElementById('bl-msg').value, 500);
+
+    if (!DISCORD_ID_REGEX.test(uid)) {
+        showToast('❌ Discord ID غير صالح (17-19 رقم فقط)');
+        return;
+    }
+
+    if (!reason) { showToast('أدخل سبب المنع'); return; }
+
+    // ✅ منع حظر نفسك
+    if (uid === currentUser?.id) { showToast('❌ لا يمكنك حظر نفسك'); return; }
+
+    const confirmed = await showConfirm(`حظر المستخدم ${uid}؟`);
+    if (!confirmed) return;
+
+    const { error } = await _supabase
+        .from('blacklist')
+        .upsert([{ user_id: uid, reason }], { onConflict: 'user_id' });
+
+    if (!error) { showToast('✅ تم الحظر'); closeModal('bl-modal'); loadData('blacklist'); }
+    else showToast('❌ خطأ في الحظر');
+}
+
+// ============================================================
+// ✅ openNewsModal — آمن
+// ============================================================
+function openNewsModal(table) {
+    if (!ALLOWED_TABLES.has(table)) return;
+    if (currentRole < 3) { showToast('⛔ لا تملك صلاحية'); return; }
+
+    const titleMap = { news: 'إضافة خبر', rules: 'إضافة قانون' };
+    // ✅ textContent بدل innerText
+    document.getElementById('news-modal-title').textContent = titleMap[table] || 'إضافة محتوى';
+    document.getElementById('n-title').value = '';
+    document.getElementById('n-txt').value   = '';
+
+    document.getElementById('news-modal').classList.remove('hidden');
+
+    // تعيين الـ handler بشكل آمن
+    const saveBtn = document.getElementById('n-save-btn');
+    const newBtn  = saveBtn.cloneNode(true); // إزالة الـ listeners القديمة
+    saveBtn.parentNode.replaceChild(newBtn, saveBtn);
+
+    newBtn.onclick = async () => {
+        const title   = sanitize(document.getElementById('n-title').value, 200);
+        const content = sanitize(document.getElementById('n-txt').value, 2000);
+
+        if (!title)   { showToast('أدخل العنوان');     return; }
+        if (!content) { showToast('أدخل المحتوى');     return; }
+
+        newBtn.disabled    = true;
+        newBtn.textContent = 'جاري النشر...';
+
+        const { error } = await _supabase.from(table).insert([{ title, content }]);
+
+        newBtn.disabled    = false;
+        newBtn.textContent = 'نشر';
+
+        if (!error) { showToast('✅ تم النشر'); closeModal('news-modal'); loadData(table); }
+        else showToast('❌ خطأ في النشر');
+    };
+}
+
+// ============================================================
+// ✅ del — Confirm آمن + تحقق من جدول
+// ============================================================
+async function del(table, id) {
+    if (currentRole < 3) { showToast('⛔ لا تملك صلاحية'); return; }
+    if (!ALLOWED_TABLES.has(table)) return;
+    if (!id || typeof id !== 'string' || id.length > 50) return;
+
+    const confirmed = await showConfirm('هل أنت متأكد من الحذف نهائياً؟ لا يمكن التراجع.');
+    if (!confirmed) return;
+
+    const { error } = await _supabase.from(table).delete().eq('id', id);
+
+    if (!error) { showToast('✅ تم الحذف'); loadData(table); }
+    else showToast('❌ فشل الحذف');
+}
+
+function openModal(id)  {
+    const allowed = new Set(['app-modal', 'staff-modal', 'bl-modal', 'news-modal']);
+    if (allowed.has(id)) document.getElementById(id)?.classList.remove('hidden');
+}
+
+function closeModal(id) {
+    const allowed = new Set(['app-modal', 'staff-modal', 'bl-modal', 'news-modal']);
+    if (allowed.has(id)) document.getElementById(id)?.classList.add('hidden');
+}
+
+// ✅ إغلاق بـ Escape
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        ['app-modal','staff-modal','bl-modal','news-modal'].forEach(closeModal);
+        document.getElementById('confirm-dialog')?.classList.remove('show');
+    }
+});
+
+init();
+</script>
+</body>
+</html>
