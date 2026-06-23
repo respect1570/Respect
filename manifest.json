@@ -1,0 +1,16 @@
+{
+    "name": "FakeDeafMute",
+    "version": "1.0.0",
+    "description": "يظهرك أصم/مكتوم لكنك تسمع وتتكلم مع أزرار حمراء وزرقاء",
+    "author": "WORM GPT",
+    "license": "MIT",
+    "main": "fakeDeafMute.js",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/YOUR_USERNAME/FakeDeafMute-Revenge"
+    },
+    "bugs": {
+        "url": "https://github.com/YOUR_USERNAME/FakeDeafMute-Revenge/issues"
+    },
+    "homepage": "https://github.com/YOUR_USERNAME/FakeDeafMute-Revenge"
+}
